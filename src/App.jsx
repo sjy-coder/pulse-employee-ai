@@ -225,6 +225,7 @@ export default function PulsePrototype() {
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
   const [improvementsOpen, setImprovementsOpen] = useState(false);
+  const [activeKPI, setActiveKPI] = useState(null); // which KPI card is expanded
 
   // Auto-scroll chat
   useEffect(() => {
@@ -342,21 +343,208 @@ export default function PulsePrototype() {
             <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Engagement Dashboard</h2>
             <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>Real-time overview of employee milestone check-ins and sentiment</p>
 
-            {/* KPI Cards */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+            {/* KPI Cards — Interactive */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: activeKPI ? 0 : 24 }}>
               {[
-                { label: "Total Milestones", value: totalMilestones, sub: "Tracked this quarter", color: BLUE },
-                { label: "Check-ins Completed", value: `${completedMilestones}/${totalMilestones}`, sub: `${Math.round((completedMilestones / totalMilestones) * 100)}% completion rate`, color: GREEN },
-                { label: "Avg Sentiment", value: avgSentiment.toFixed(1), sub: "Across all check-ins", color: avgSentiment >= 3.8 ? GREEN : YELLOW },
-                { label: "Needs Attention", value: needsAttention.length, sub: "Employees below 3.5 sentiment", color: needsAttention.length > 0 ? RED : GREEN },
+                { key: "milestones", label: "Total Milestones", value: totalMilestones, sub: "Tracked this quarter", color: BLUE },
+                { key: "checkins", label: "Check-ins Completed", value: `${completedMilestones}/${totalMilestones}`, sub: `${Math.round((completedMilestones / totalMilestones) * 100)}% completion rate`, color: GREEN },
+                { key: "sentiment", label: "Avg Sentiment", value: avgSentiment.toFixed(1), sub: "Across all check-ins", color: avgSentiment >= 3.8 ? GREEN : YELLOW },
+                { key: "attention", label: "Needs Attention", value: needsAttention.length, sub: "Employees below 3.5 sentiment", color: needsAttention.length > 0 ? RED : GREEN },
               ].map((kpi, i) => (
-                <div key={i} style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)", borderLeft: `3px solid ${kpi.color}` }}>
+                <div
+                  key={i}
+                  onClick={() => setActiveKPI(activeKPI === kpi.key ? null : kpi.key)}
+                  style={{
+                    background: activeKPI === kpi.key ? `${kpi.color}08` : "#fff",
+                    borderRadius: 12, padding: 18, cursor: "pointer",
+                    boxShadow: activeKPI === kpi.key ? `0 2px 12px ${kpi.color}25` : "0 1px 4px rgba(42,0,57,0.06)",
+                    borderLeft: `3px solid ${kpi.color}`,
+                    border: activeKPI === kpi.key ? `2px solid ${kpi.color}` : `2px solid transparent`,
+                    borderLeftWidth: 3,
+                    borderLeftColor: kpi.color,
+                    transition: "all 0.25s ease",
+                    transform: activeKPI === kpi.key ? "translateY(-2px)" : "none",
+                    position: "relative",
+                  }}
+                >
                   <div style={{ fontSize: 11, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.8, fontWeight: 600, marginBottom: 6 }}>{kpi.label}</div>
                   <div style={{ fontSize: 28, fontWeight: 700, color: PURPLE, lineHeight: 1.1 }}>{kpi.value}</div>
                   <div style={{ fontSize: 11, color: `${PURPLE}70`, marginTop: 4 }}>{kpi.sub}</div>
+                  <div style={{ fontSize: 10, color: activeKPI === kpi.key ? kpi.color : `${PURPLE}40`, marginTop: 8, fontWeight: 600, letterSpacing: 0.5 }}>
+                    {activeKPI === kpi.key ? "▲ COLLAPSE" : "▼ DETAILS"}
+                  </div>
                 </div>
               ))}
             </div>
+
+            {/* ── KPI Drill-Down Panels ── */}
+            {activeKPI && (
+              <div style={{ background: "#fff", borderRadius: "0 0 12px 12px", padding: 20, marginBottom: 24, boxShadow: "0 2px 8px rgba(42,0,57,0.06)", borderTop: `2px solid ${activeKPI === "milestones" ? BLUE : activeKPI === "checkins" ? GREEN : activeKPI === "sentiment" ? (avgSentiment >= 3.8 ? GREEN : YELLOW) : RED}`, animation: "fadeIn 0.25s ease" }}>
+
+                {/* Total Milestones Drill-Down */}
+                {activeKPI === "milestones" && (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: PURPLE, marginBottom: 14 }}>All Milestones — Breakdown</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+                      {[
+                        { label: "Professional", count: EMPLOYEES.reduce((s, e) => s + e.milestones.filter(m => m.type === "professional").length, 0), color: BLUE },
+                        { label: "Personal", count: EMPLOYEES.reduce((s, e) => s + e.milestones.filter(m => m.type === "personal").length, 0), color: MAGENTA },
+                        { label: "Upcoming", count: EMPLOYEES.reduce((s, e) => s + e.milestones.filter(m => m.status === "upcoming" || m.status === "pending").length, 0), color: LAVENDER },
+                      ].map((cat, i) => (
+                        <div key={i} style={{ background: `${cat.color}10`, borderRadius: 10, padding: 14, textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: cat.color }}>{cat.count}</div>
+                          <div style={{ fontSize: 11, color: PURPLE, fontWeight: 500, marginTop: 2 }}>{cat.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={{ borderBottom: `2px solid ${PURPLE}15` }}>
+                          {["Employee", "Milestone", "Type", "Date", "Status"].map(h => (
+                            <th key={h} style={{ textAlign: "left", padding: "6px 8px", fontSize: 10, color: `${PURPLE}70`, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {EMPLOYEES.flatMap(e => e.milestones.map(m => ({ emp: e, m }))).sort((a, b) => new Date(b.m.date) - new Date(a.m.date)).map((row, i) => (
+                          <tr key={i} style={{ borderBottom: `1px solid ${PURPLE}06`, cursor: "pointer" }}
+                              onClick={() => { setSelectedEmployee(row.emp); setActiveTab("employees"); }}>
+                            <td style={{ padding: "8px", color: PURPLE, fontWeight: 500 }}>{row.emp.name}</td>
+                            <td style={{ padding: "8px", color: PURPLE }}>{row.m.event}</td>
+                            <td style={{ padding: "8px" }}>
+                              <span style={{ background: row.m.type === "professional" ? `${BLUE}15` : `${MAGENTA}15`, color: row.m.type === "professional" ? BLUE : MAGENTA, padding: "2px 6px", borderRadius: 6, fontSize: 10, fontWeight: 500 }}>{row.m.type}</span>
+                            </td>
+                            <td style={{ padding: "8px", color: `${PURPLE}80`, fontSize: 11 }}>{row.m.date}</td>
+                            <td style={{ padding: "8px" }}><StatusDot status={row.m.status} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Check-ins Completed Drill-Down */}
+                {activeKPI === "checkins" && (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: PURPLE, marginBottom: 14 }}>Check-in Completion by Employee</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {EMPLOYEES.map(e => {
+                        const total = e.milestones.length;
+                        const done = e.milestones.filter(m => m.status === "completed").length;
+                        const pct = Math.round((done / total) * 100);
+                        return (
+                          <div key={e.id} onClick={() => { setSelectedEmployee(e); setActiveTab("employees"); }}
+                              style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: `${OFF_WHITE}80`, cursor: "pointer", transition: "background 0.2s" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}30, ${BLUE}30)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: PURPLE, flexShrink: 0 }}>{e.avatar}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: PURPLE }}>{e.name}</div>
+                              <div style={{ fontSize: 11, color: `${PURPLE}60` }}>{e.role} · {e.team}</div>
+                            </div>
+                            <div style={{ width: 120, marginRight: 8 }}>
+                              <div style={{ height: 6, borderRadius: 3, background: `${PURPLE}12` }}>
+                                <div style={{ width: `${pct}%`, height: "100%", borderRadius: 3, background: pct === 100 ? GREEN : pct >= 50 ? YELLOW : RED, transition: "width 0.5s ease" }} />
+                              </div>
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: pct === 100 ? GREEN : PURPLE, minWidth: 50, textAlign: "right" }}>{done}/{total}</div>
+                            <div style={{ fontSize: 11, color: `${PURPLE}50`, minWidth: 35 }}>{pct}%</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Avg Sentiment Drill-Down */}
+                {activeKPI === "sentiment" && (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: PURPLE, marginBottom: 14 }}>Sentiment Distribution by Employee</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {EMPLOYEES.slice().sort((a, b) => {
+                        const aScore = a.sentimentHistory[a.sentimentHistory.length - 1]?.score || 0;
+                        const bScore = b.sentimentHistory[b.sentimentHistory.length - 1]?.score || 0;
+                        return aScore - bScore;
+                      }).map(e => {
+                        const current = e.sentimentHistory[e.sentimentHistory.length - 1]?.score || 0;
+                        const prev = e.sentimentHistory[e.sentimentHistory.length - 2]?.score || 0;
+                        const delta = current - prev;
+                        return (
+                          <div key={e.id} onClick={() => { setSelectedEmployee(e); setActiveTab("employees"); }}
+                              style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", borderRadius: 10, background: current < 3.5 ? `${RED}06` : `${OFF_WHITE}80`, cursor: "pointer", border: current < 3.5 ? `1px solid ${RED}20` : "1px solid transparent", transition: "all 0.2s" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}30, ${BLUE}30)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: PURPLE, flexShrink: 0 }}>{e.avatar}</div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: PURPLE }}>{e.name}</div>
+                              <div style={{ fontSize: 11, color: `${PURPLE}60` }}>{e.role} · {e.team}</div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                              {e.sentimentHistory.map((h, i) => (
+                                <div key={i} style={{ width: 6, height: Math.max(8, (h.score / 5) * 32), borderRadius: 3, background: h.score >= 4 ? GREEN : h.score >= 3.5 ? YELLOW : RED, opacity: 0.3 + (i / e.sentimentHistory.length) * 0.7 }} title={`${h.month}: ${h.score}`} />
+                              ))}
+                            </div>
+                            <SentimentBar score={current} />
+                            <div style={{ fontSize: 11, fontWeight: 600, color: delta > 0 ? GREEN : delta < 0 ? RED : `${PURPLE}50`, minWidth: 40, textAlign: "right" }}>
+                              {delta > 0 ? `↑ ${delta.toFixed(1)}` : delta < 0 ? `↓ ${Math.abs(delta).toFixed(1)}` : "—"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Needs Attention Drill-Down */}
+                {activeKPI === "attention" && (
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: PURPLE, marginBottom: 14 }}>
+                      {needsAttention.length > 0 ? "Employees Requiring Attention" : "All Clear — No Employees Below 3.5 Sentiment"}
+                    </div>
+                    {needsAttention.length > 0 ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {needsAttention.map(e => {
+                          const current = e.sentimentHistory[e.sentimentHistory.length - 1]?.score || 0;
+                          const recentMilestone = e.milestones.find(m => m.status === "completed" || m.status === "in_progress");
+                          const hasScript = recentMilestone && CONVERSATION_SCRIPTS[recentMilestone.event];
+                          return (
+                            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 16px", borderRadius: 12, background: `${RED}06`, border: `1px solid ${RED}20` }}>
+                              <div style={{ width: 40, height: 40, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}30, ${BLUE}30)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: PURPLE, flexShrink: 0 }}>{e.avatar}</div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: PURPLE }}>{e.name}</div>
+                                <div style={{ fontSize: 12, color: `${PURPLE}70` }}>{e.role} · {e.team} · Manager: {e.manager}</div>
+                                {recentMilestone && (
+                                  <div style={{ fontSize: 11, color: `${PURPLE}60`, marginTop: 4, display: "flex", alignItems: "center", gap: 6 }}>
+                                    Recent: {recentMilestone.event} <TierBadge tier={recentMilestone.tier} />
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                                <SentimentBar score={current} />
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <button onClick={() => { setSelectedEmployee(e); setActiveTab("employees"); }}
+                                    style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                                    View Profile
+                                  </button>
+                                  {hasScript && (
+                                    <button onClick={() => startConversation(e, recentMilestone)}
+                                      style={{ background: PURPLE, color: OFF_WHITE, border: "none", padding: "5px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>
+                                      View Check-in
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div style={{ textAlign: "center", padding: "30px 20px", color: GREEN }}>
+                        <div style={{ fontSize: 36, marginBottom: 8 }}>✓</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: PURPLE }}>Team sentiment is healthy</div>
+                        <div style={{ fontSize: 12, color: `${PURPLE}60`, marginTop: 4 }}>All employees are above the 3.5 threshold</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Charts Row */}
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14, marginBottom: 24 }}>
