@@ -933,11 +933,15 @@ export default function BelongIn() {
         {/* ═══════ EMPLOYEES TAB ═══════ */}
         {activeTab === "employees" && (
           <div>
+            <button onClick={() => { setActiveTab("dashboard"); setSelectedEmployee(null); setTeamFilter(null); setShowConversation(false); setActiveConversation(null); }}
+              style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+              {"\u2190"} Back to Dashboard
+            </button>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: 0 }}>Employee Profiles</h2>
               {teamFilter && (
                 <button onClick={() => setTeamFilter(null)} style={{ background: `${VIOLET}15`, color: VIOLET, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
-                  Showing: {teamFilter} team \u00D7 Clear
+                  Showing: {teamFilter} team {"\u00D7"} Clear
                 </button>
               )}
             </div>
@@ -1001,11 +1005,16 @@ export default function BelongIn() {
                   <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
                       <div style={{ width: 48, height: 48, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}, ${BLUE})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: OFF_WHITE }}>{selectedEmployee.avatar}</div>
-                      <div>
+                      <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 18, fontWeight: 700, color: PURPLE }}>{selectedEmployee.name}</div>
                         <div style={{ fontSize: 13, color: `${PURPLE}80` }}>{selectedEmployee.role} \u00B7 {selectedEmployee.team} \u00B7 Tenure: {selectedEmployee.tenure}</div>
                         <div style={{ fontSize: 12, color: `${PURPLE}60` }}>Manager: {selectedEmployee.manager}</div>
                       </div>
+                      <button onClick={() => setSelectedEmployee(null)}
+                        style={{ background: `${PURPLE}08`, color: `${PURPLE}60`, border: "none", width: 32, height: 32, borderRadius: 8, cursor: "pointer", fontSize: 16, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+                        title="Close profile">
+                        {"\u2715"}
+                      </button>
                     </div>
 
                     <div style={{ marginBottom: 20 }}>
@@ -1077,6 +1086,10 @@ export default function BelongIn() {
         {/* ═══════ TRY THE AI TAB ═══════ */}
         {activeTab === "tryit" && (
           <div>
+            <button onClick={() => { setActiveTab("dashboard"); setTryitMilestone(null); setChatMessages([]); setTryitDone(false); }}
+              style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+              {"\u2190"} Back to Dashboard
+            </button>
             <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Try the AI</h2>
             <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>
               {tryitMilestone ? "Type your responses below - the AI adapts to what you say, including one-word replies." : "Pick a milestone to experience how BelongIn checks in with employees."}
@@ -1241,6 +1254,10 @@ export default function BelongIn() {
         {/* ═══════ IMPROVEMENTS TAB ═══════ */}
         {activeTab === "improvements" && (
           <div>
+            <button onClick={() => setActiveTab("dashboard")}
+              style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+              {"\u2190"} Back to Dashboard
+            </button>
             <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>How This Prototype Can Be Improved</h2>
             <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 24px" }}>Key areas to evolve from prototype to production-ready system</p>
 
