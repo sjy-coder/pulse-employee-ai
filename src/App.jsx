@@ -632,7 +632,7 @@ export default function BelongIn() {
             { key: "dashboard", label: "HR Dashboard" },
             { key: "teamview", label: "Team View" },
             { key: "employees", label: "Employees" },
-            { key: "tryit", label: "Try the AI" },
+            { key: "tryit", label: "AI Playground" },
             { key: "improvements", label: "How to Improve" },
           ].map(tab => (
             <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearchQuery(""); }}
@@ -1408,7 +1408,7 @@ export default function BelongIn() {
               style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
               {"\u2190"} Back to Dashboard
             </button>
-            <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Try the AI</h2>
+            <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>AI Playground</h2>
             <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>
               {tryitMilestone ? "Type your responses below - the AI adapts to what you say, including one-word replies." : "Pick a milestone to experience how BelongIn checks in with employees."}
             </p>
