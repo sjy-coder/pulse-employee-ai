@@ -182,6 +182,23 @@ const CONVERSATION_SCRIPTS = {
   ],
 };
 
+// ─── TRY-IT MILESTONES (interactive mode) ───
+const TRYIT_MILESTONES = [
+  { id: "anniversary", label: "Work Anniversary", icon: "\uD83C\uDF82", desc: "Celebrating 1, 2, or 3+ years at the company" },
+  { id: "promotion", label: "Recent Promotion", icon: "\uD83D\uDE80", desc: "Just been promoted to a new role" },
+  { id: "new_manager", label: "New Manager", icon: "\uD83D\uDD04", desc: "Started reporting to someone new" },
+  { id: "return_leave", label: "Return from Leave", icon: "\uD83C\uDFE1", desc: "Back after parental, medical, or personal leave" },
+  { id: "first_lead", label: "Leading a Project", icon: "\u2B50", desc: "Leading a project or initiative for the first time" },
+];
+
+const AI_OPENERS = {
+  anniversary: "Hey! \uD83C\uDF89 Happy work anniversary - that's a real milestone. How are you feeling about your time here so far?",
+  promotion: "Congratulations on the promotion! \uD83D\uDE80 That's exciting news. How are you settling into the new role?",
+  new_manager: "I heard you've got a new manager - transitions like that can bring up a lot. How's it going so far?",
+  return_leave: "Welcome back! \uD83D\uDE4C Hope your time away was what you needed. How are you feeling about being back?",
+  first_lead: "I heard you're leading a project for the first time - that's a big deal! \u2B50 How are you feeling about it?",
+};
+
 // ─── COMPONENTS ───
 
 const TierBadge = ({ tier }) => {
@@ -289,6 +306,9 @@ export default function BelongIn() {
   const [activeKPI, setActiveKPI] = useState(null);
   const [teamFilter, setTeamFilter] = useState(null);
   const [showConversation, setShowConversation] = useState(false);
+  const [tryitMilestone, setTryitMilestone] = useState(null);
+  const [userInput, setUserInput] = useState("");
+  const [tryitDone, setTryitDone] = useState(false);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -309,6 +329,186 @@ export default function BelongIn() {
     setChatMessages([]);
     setChatIndex(0);
     setActiveTab("tryit");
+  };
+
+  // ─── INTERACTIVE TRY-IT MODE ───
+  const selectTryitMilestone = (id) => {
+    setTryitMilestone(id);
+    setTryitDone(false);
+    setActiveConversation(null);
+    setChatMessages([{ sender: "ai", text: AI_OPENERS[id] }]);
+    setUserInput("");
+  };
+
+  const generateAIResponse = (milestoneId, currentMessages, userText) => {
+    const userMsgs = currentMessages.filter(m => m.sender === "employee");
+    const stage = userMsgs.length - 1;
+    const lower = userText.toLowerCase().trim();
+    const wordCount = userText.trim().split(/\s+/).length;
+    const isShort = wordCount <= 2;
+
+    let shortStreak = isShort ? 1 : 0;
+    if (isShort) {
+      for (let i = userMsgs.length - 2; i >= 0; i--) {
+        if (userMsgs[i].text.trim().split(/\s+/).length <= 2) shortStreak++;
+        else break;
+      }
+    }
+
+    const hasPos = /good|great|amazing|love|happy|excited|fantastic|awesome|wonderful|thrilled|enjoy|proud|better|nice|well|cool|solid|sweet|yes|sure|definitely/.test(lower);
+    const hasNeg = /bad|tough|hard|stressed|overwhelmed|struggling|difficult|worried|anxious|tired|frustrated|scared|nervous|lost|confused|lonely|terrible|awful|burnout|hate|mess|chaos|behind|no|not really|nope/.test(lower);
+
+    // Short response handling
+    if (shortStreak >= 3) {
+      return {
+        text: "I respect that you prefer keeping things brief - and that's completely fine. Just know this channel is always open if anything comes up. Take care! \uD83D\uDE0A",
+        aiAnalysis: "Three consecutive short responses detected. Rather than pushing further, the AI wraps up gracefully. This respects the employee's communication style while keeping the door open for future conversations.",
+        done: true,
+        meta: { sentiment: 3.0, themes: ["Brief communicator", "Minimal engagement preference"], action: "No action taken - respected communication preference", routed_to: "None (employee choice)" }
+      };
+    }
+
+    if (shortStreak === 2) {
+      const probes = {
+        anniversary: "I notice you're keeping it short - totally fine, no pressure. If I had to ask just one thing: is it more the work itself or the people around you that's top of mind right now?",
+        promotion: "Keeping it brief - no worries at all. Quick one: is the new role what you expected, or have there been surprises?",
+        new_manager: "Short and sweet - I respect that. Just one thing: do you feel like you and your new manager are on the same page about priorities?",
+        return_leave: "I notice the brief replies - no pressure. Just one thing: is there anything practical (access, catching up on changes) that would make being back easier?",
+        first_lead: "Keeping things short - totally fine. Just curious: is it the people side or the project scope that feels like the bigger stretch?",
+      };
+      return {
+        text: probes[milestoneId],
+        aiAnalysis: "Second consecutive short response. Instead of pushing harder, the AI offers a specific either/or question. Binary choices are much easier to engage with than open-ended prompts, and often unlock more detailed responses from reserved communicators.",
+        done: false
+      };
+    }
+
+    if (isShort && stage >= 1) {
+      const nudges = {
+        anniversary: "Got it! Is there anything that stands out - maybe a highlight or something you wish were different?",
+        promotion: "Nice! Is the new scope feeling clear, or still figuring things out?",
+        new_manager: "Okay! Have you had a real 1:1 yet, or is it still early days?",
+        return_leave: "Glad to hear. Was there anything surprising about coming back?",
+        first_lead: "Cool! Is the timeline feeling manageable, or is it tight?",
+      };
+      return {
+        text: nudges[milestoneId],
+        aiAnalysis: `Short response detected (${wordCount} word${wordCount > 1 ? "s" : ""}). The AI doesn't take it at face value. Instead of another broad question, it asks something concrete and specific that's easier to engage with.`,
+        done: false
+      };
+    }
+
+    // Normal stage-based flow
+    if (stage === 0) {
+      if (hasNeg) {
+        const r = {
+          anniversary: "I appreciate you being honest about that. What's been the hardest part? Is it the work itself, the team dynamics, or something else?",
+          promotion: "Thanks for being real. Promotions can be more stressful than people expect. What's been the trickiest part of the transition?",
+          new_manager: "That's fair - new manager transitions can be unsettling. Is it a difference in working style, unclear expectations, or something else entirely?",
+          return_leave: "Coming back is often harder than people expect. Is it more about catching up on what you missed, or the adjustment of being back in the routine?",
+          first_lead: "I hear you - stepping into a lead role brings real pressure. Is it the responsibility that weighs on you, or more about managing the team dynamics?",
+        };
+        return { text: r[milestoneId], done: false };
+      } else if (hasPos) {
+        const r = {
+          anniversary: "That's great to hear! What would you say has been the biggest highlight? And is there anything you'd change if you could?",
+          promotion: "Love that energy! What's been the best part of the new role so far? And anything that's taken you by surprise?",
+          new_manager: "That's really positive! What's clicked well so far? And is there anything you'd want to be different?",
+          return_leave: "Really glad to hear that. What's helped the most with the transition back? And is there anything that could be smoother?",
+          first_lead: "Awesome - that's the right energy! What's been the most exciting part? And anything that keeps you up at night about it?",
+        };
+        return { text: r[milestoneId], done: false };
+      } else {
+        const r = {
+          anniversary: "Thanks for sharing. Looking back, what's been the most meaningful part of your time here? And what would you change if you could?",
+          promotion: "Got it. Now that you're settling in, what's feeling clear and what still feels ambiguous about the new role?",
+          new_manager: "Thanks for sharing. What's your first impression been like? And is there anything you wish was different about how the transition happened?",
+          return_leave: "Thanks for the honesty. What's been the easiest part of coming back? And what's been harder than expected?",
+          first_lead: "Appreciate you sharing. What feels like the biggest opportunity here? And what's the thing that worries you most?",
+        };
+        return { text: r[milestoneId], done: false };
+      }
+    }
+
+    if (stage === 1) {
+      if (hasNeg) {
+        const r = {
+          anniversary: "That's really valuable to hear. I can flag this as a theme for your manager's attention - no specifics, just the general area. Or I can connect you with HR for a deeper conversation. What feels right?",
+          promotion: "That's important to name. I can nudge your manager to check in about the transition, or connect you with someone who's navigated a similar role change. Which would help more?",
+          new_manager: "I hear you. I can flag that the transition needs more structure - your manager would get a gentle nudge. Or I can loop in HR to help. What sounds better?",
+          return_leave: "Thanks for being open about that. I can flag to your manager that some re-onboarding support would help, or connect you with HR for practical stuff like policy updates. Want me to do either?",
+          first_lead: "That's really common for first-time leads - and it takes courage to say it out loud. I can connect you with a mentor who's been through this, or flag to your manager that some lighter parallel workload would help. What sounds useful?",
+        };
+        return { text: r[milestoneId], done: false };
+      } else {
+        const r = {
+          anniversary: "Good insights. I'll note those themes. Is there anything specific you'd want flagged to your manager? Everything stays anonymized, of course.",
+          promotion: "Great perspective. To keep the transition smooth - is there any support like mentorship, clearer goals, or team intros that would be useful right now?",
+          new_manager: "Solid read on things. Is there anything you'd want your new manager to know about how you work best? I can pass it along subtly in their next nudge.",
+          return_leave: "Sounds like you've got a good handle on it. Is there anything practical - flexible hours, a buddy system, or fewer meetings this week - that would help?",
+          first_lead: "Sounds like a good headspace. To set you up for success - a mentor, clearer scope, or just knowing your manager has your back. Any of those useful?",
+        };
+        return { text: r[milestoneId], done: false };
+      }
+    }
+
+    if (stage === 2) {
+      const action = hasNeg
+        ? "Got it - I'll take care of that. I'll route this through the right channels while keeping your identity protected. You'll see the impact without having to raise it directly."
+        : "Great - I've noted that down. The right people will be in the loop, without anything being attributed to you.";
+      return {
+        text: `${action} Before we wrap up - is there anything else on your mind? Doesn't have to be about this milestone.`,
+        done: false
+      };
+    }
+
+    // Stage 3+ - wrap up
+    const wrapups = {
+      anniversary: "Thanks for taking the time to chat. Conversations like this make a real difference. Happy anniversary again! \uD83C\uDF89",
+      promotion: "Thanks for being open - wishing you all the best in the new role. You're going to do great. \uD83D\uDCAA",
+      new_manager: "Thanks for sharing. Change is hard but it sounds like you're navigating it well. Here's to a smooth transition! \uD83E\uDD1D",
+      return_leave: "Thanks for chatting. Welcome back for real - don't hesitate to reach out anytime. One day at a time! \uD83C\uDF1F",
+      first_lead: "Thanks for the honesty. First-time leadership is a big deal, and the fact that you're reflecting on it says a lot. You've got this! \uD83D\uDCAA",
+    };
+    const themes = [];
+    const allText = currentMessages.filter(m => m.sender === "employee").map(m => m.text.toLowerCase()).join(" ");
+    if (/work|task|project|deadline|load|busy/.test(allText)) themes.push("Workload management");
+    if (/manager|boss|lead|report/.test(allText)) themes.push("Manager relationship");
+    if (/team|colleague|people|culture/.test(allText)) themes.push("Team dynamics");
+    if (/grow|learn|career|skill|promotion/.test(allText)) themes.push("Career growth");
+    if (/balance|hour|burnout|stress|overwhelm/.test(allText)) themes.push("Work-life balance");
+    if (/lost|confus|unclear|ambig/.test(allText)) themes.push("Role clarity");
+    if (themes.length === 0) themes.push("General check-in");
+
+    return {
+      text: wrapups[milestoneId],
+      done: true,
+      meta: {
+        sentiment: hasNeg ? 3.2 : hasPos ? 4.3 : 3.7,
+        themes,
+        action: "Themes logged and routed to relevant stakeholders (anonymized)",
+        routed_to: "Manager 1:1 talking points + HR themes dashboard"
+      }
+    };
+  };
+
+  const handleSendMessage = () => {
+    if (!userInput.trim() || !tryitMilestone || tryitDone) return;
+    const userMsg = { sender: "employee", text: userInput.trim() };
+    const updatedMessages = [...chatMessages, userMsg];
+    setChatMessages(updatedMessages);
+    setUserInput("");
+    setIsTyping(true);
+
+    setTimeout(() => {
+      const response = generateAIResponse(tryitMilestone, updatedMessages, userMsg.text);
+      const aiMsg = { sender: "ai", text: response.text };
+      if (response.aiAnalysis) aiMsg.aiAnalysis = response.aiAnalysis;
+      if (response.meta) aiMsg.meta = response.meta;
+      setChatMessages(prev => [...prev, aiMsg]);
+      setIsTyping(false);
+      if (response.done) setTryitDone(true);
+    }, 800 + Math.random() * 700);
   };
 
   useEffect(() => {
@@ -416,7 +616,7 @@ export default function BelongIn() {
             { key: "tryit", label: "Try the AI" },
             { key: "improvements", label: "How to Improve" },
           ].map(tab => (
-            <button key={tab.key} onClick={() => { setActiveTab(tab.key); if (tab.key === "tryit" && !activeConversation) startDemoConversation(); }}
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               style={{
                 background: activeTab === tab.key ? `${OFF_WHITE}20` : tab.key === "tryit" ? `${YELLOW}25` : "transparent",
                 color: activeTab === tab.key ? OFF_WHITE : tab.key === "tryit" ? YELLOW : `${OFF_WHITE}80`,
@@ -878,75 +1078,163 @@ export default function BelongIn() {
         {activeTab === "tryit" && (
           <div>
             <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Try the AI</h2>
-            <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>Experience a BelongIn check-in conversation first-hand. Share this with your colleagues!</p>
+            <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>
+              {tryitMilestone ? "Type your responses below - the AI adapts to what you say, including one-word replies." : "Pick a milestone to experience how BelongIn checks in with employees."}
+            </p>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 16 }}>
-              {activeConversation ? (
-                <ChatWindow height={480} />
-              ) : (
-                <div style={{ background: "#fff", borderRadius: 12, padding: 40, textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: 400 }}>
-                  <div style={{ width: 64, height: 64, borderRadius: 16, background: `linear-gradient(135deg, ${VIOLET}20, ${YELLOW}20)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 28 }}>\uD83E\uDD16</div>
-                  <p style={{ color: PURPLE, fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Ready to experience a check-in?</p>
-                  <p style={{ color: `${PURPLE}70`, fontSize: 13, marginBottom: 20 }}>Click below to start a demo conversation and see how the AI companion works.</p>
-                  <button onClick={startDemoConversation}
-                    style={{ background: PURPLE, color: OFF_WHITE, border: "none", padding: "12px 28px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-                    Start Demo Check-in
-                  </button>
-                </div>
-              )}
-
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>What You're Seeing</div>
-                  <div style={{ fontSize: 12, color: `${PURPLE}90`, lineHeight: 1.6 }}>
-                    This is a simulated version of what employees experience during a milestone check-in. In production, the AI adapts in real-time to each employee's responses, context, and emotional signals.
-                  </div>
-                </div>
-
-                <div style={{ background: `${VIOLET}08`, borderRadius: 12, padding: 16, border: `1px solid ${VIOLET}20` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: VIOLET, marginBottom: 8 }}>How the AI Handles One-Word Responses</div>
-                  <div style={{ fontSize: 12, color: `${PURPLE}90`, lineHeight: 1.6 }}>
-                    When employees respond with just "Fine" or "Yeah", the AI doesn't take it at face value. It uses follow-up strategies: asking more specific questions, naming the pattern non-judgmentally, and offering concrete resources. See this in action in Rohan's "First Project Lead" check-in.
-                  </div>
-                  <button onClick={() => {
-                    const rohan = EMPLOYEES.find(e => e.name === "Rohan Kapoor");
-                    const milestone = rohan.milestones.find(m => m.event === "First Project Lead Assignment");
-                    startConversation(rohan, milestone);
-                    setActiveTab("employees");
-                  }}
-                    style={{ background: VIOLET, color: OFF_WHITE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 600, marginTop: 8 }}>
-                    View Rohan's Check-in \u2192
-                  </button>
-                </div>
-
-                <div style={{ background: `${CREAM}60`, borderRadius: 12, padding: 16, border: `1px solid ${YELLOW}30` }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: PURPLE, marginBottom: 6 }}>Guardrails Active</div>
-                  {["No clinical diagnoses", "No promises on behalf of org", "Always offer human escalation", "Respect opt-out requests", "Unlimited exchanges per session", "Employee controls what gets shared"].map((g, i) => (
-                    <div key={i} style={{ fontSize: 11, color: `${PURPLE}90`, padding: "2px 0", display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{ color: GREEN, fontSize: 13 }}>\u2713</span> {g}
+            {!tryitMilestone ? (
+              /* Milestone Picker */
+              <div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 24 }}>
+                  {TRYIT_MILESTONES.map((m) => (
+                    <div key={m.id} onClick={() => selectTryitMilestone(m.id)}
+                      style={{ background: "#fff", borderRadius: 14, padding: "24px 16px", textAlign: "center", cursor: "pointer", border: "2px solid transparent", transition: "all 0.25s", boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = VIOLET; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = `0 6px 20px ${VIOLET}18`; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(42,0,57,0.06)"; }}
+                    >
+                      <div style={{ fontSize: 32, marginBottom: 10 }}>{m.icon}</div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: PURPLE, marginBottom: 4 }}>{m.label}</div>
+                      <div style={{ fontSize: 11, color: `${PURPLE}60`, lineHeight: 1.4 }}>{m.desc}</div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Other Scenarios to Try</div>
-                  {[
-                    { name: "Priya Sharma", event: "3-Year Work Anniversary", label: "Celebratory" },
-                    { name: "Ananya Desai", event: "Bereavement Leave Return", label: "Sensitive" },
-                    { name: "Rohan Kapoor", event: "First Project Lead Assignment", label: "One-word responses" },
-                  ].map((s, i) => {
-                    const emp = EMPLOYEES.find(e => e.name === s.name);
-                    const ms = emp?.milestones.find(m => m.event === s.event);
-                    return emp && ms ? (
-                      <button key={i} onClick={() => { startConversation(emp, ms); setActiveTab("employees"); }}
-                        style={{ display: "block", width: "100%", textAlign: "left", background: `${OFF_WHITE}`, border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, color: PURPLE, marginBottom: 4 }}>
-                        <span style={{ fontWeight: 600 }}>{s.name}</span> <span style={{ color: `${PURPLE}40` }}>{"\u00B7"}</span> <span style={{ color: `${PURPLE}70` }}>{s.label}</span>
-                      </button>
-                    ) : null;
-                  })}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+                  <div style={{ background: `${VIOLET}08`, borderRadius: 12, padding: 18, border: `1px solid ${VIOLET}20` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: VIOLET, marginBottom: 8 }}>Try replying in one word</div>
+                    <div style={{ fontSize: 12, color: `${PURPLE}90`, lineHeight: 1.6 }}>
+                      Pick a milestone and try responding with just "Fine" or "Ok" and watch how the AI adapts. It won't take short answers at face value - it'll probe gently with specific questions. After 2-3 short replies, it wraps up gracefully rather than pushing.
+                    </div>
+                  </div>
+                  <div style={{ background: `${CREAM}60`, borderRadius: 12, padding: 18, border: `1px solid ${YELLOW}30` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 8 }}>What happens behind the scenes</div>
+                    <div style={{ fontSize: 12, color: `${PURPLE}90`, lineHeight: 1.6 }}>
+                      The AI analyzes response length, detects sentiment keywords, tracks patterns across the conversation, and adjusts its approach in real-time. Purple annotation boxes appear showing the AI's reasoning when it detects interesting patterns.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: 16, background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 8 }}>Or view pre-scripted scenarios</div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    {[
+                      { name: "Priya Sharma", event: "3-Year Work Anniversary", label: "Celebratory" },
+                      { name: "Ananya Desai", event: "Bereavement Leave Return", label: "Sensitive" },
+                      { name: "Rohan Kapoor", event: "First Project Lead Assignment", label: "One-word demo" },
+                    ].map((s, i) => {
+                      const emp = EMPLOYEES.find(e => e.name === s.name);
+                      const ms = emp?.milestones.find(m => m.event === s.event);
+                      return emp && ms ? (
+                        <button key={i} onClick={() => { startConversation(emp, ms); setActiveTab("employees"); }}
+                          style={{ background: OFF_WHITE, border: `1px solid ${PURPLE}12`, padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, color: PURPLE }}>
+                          <span style={{ fontWeight: 600 }}>{s.name}</span> <span style={{ color: `${PURPLE}40` }}>{"\u00B7"}</span> <span style={{ color: `${PURPLE}60` }}>{s.label}</span>
+                        </button>
+                      ) : null;
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              /* Interactive Chat */
+              <div>
+                <button onClick={() => { setTryitMilestone(null); setChatMessages([]); setTryitDone(false); }}
+                  style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+                  {"\u2190"} Pick a different milestone
+                </button>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: 16 }}>
+                  <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 1px 4px rgba(42,0,57,0.06)", display: "flex", flexDirection: "column", height: 520 }}>
+                    <div style={{ padding: "12px 16px", borderBottom: `1px solid ${PURPLE}10`, display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}, ${PURPLE})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: OFF_WHITE }}>B</div>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: PURPLE }}>BelongIn Check-in</div>
+                        <div style={{ fontSize: 11, color: `${PURPLE}70` }}>{TRYIT_MILESTONES.find(m => m.id === tryitMilestone)?.label} {TRYIT_MILESTONES.find(m => m.id === tryitMilestone)?.icon}</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", fontSize: 11, padding: "3px 8px", borderRadius: 6, background: `${GREEN}15`, color: GREEN, fontWeight: 600 }}>Interactive</div>
+                    </div>
+                    <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+                      {chatMessages.map((msg, i) => (
+                        <div key={i}>
+                          <ChatBubble message={msg.text} isAgent={msg.sender === "ai"} aiAnalysis={msg.aiAnalysis} />
+                          {msg.meta && <OutcomeCard meta={msg.meta} />}
+                        </div>
+                      ))}
+                      {isTyping && (
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 0", color: `${PURPLE}60`, fontSize: 12 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}, ${PURPLE})`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <span style={{ color: OFF_WHITE, fontSize: 9, fontWeight: 700 }}>B</span>
+                          </div>
+                          <span style={{ animation: "pulse 1.5s ease-in-out infinite" }}>typing...</span>
+                        </div>
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+                    <form onSubmit={(e) => { e.preventDefault(); handleSendMessage(); }}
+                      style={{ padding: "12px 16px", borderTop: `1px solid ${PURPLE}10`, display: "flex", gap: 8 }}>
+                      <input value={userInput} onChange={(e) => setUserInput(e.target.value)}
+                        disabled={tryitDone || isTyping}
+                        placeholder={tryitDone ? "Conversation complete!" : "Type your response..."}
+                        style={{ flex: 1, border: `1px solid ${tryitDone ? PURPLE + "15" : VIOLET}40`, borderRadius: 8, padding: "8px 12px", fontSize: 13, background: tryitDone ? `${OFF_WHITE}50` : "#fff", color: PURPLE, outline: "none" }}
+                        autoFocus
+                      />
+                      <button type="submit" disabled={tryitDone || isTyping || !userInput.trim()}
+                        style={{ background: tryitDone || !userInput.trim() ? `${PURPLE}30` : PURPLE, color: OFF_WHITE, border: "none", padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: tryitDone || !userInput.trim() ? "default" : "pointer" }}>
+                        Send
+                      </button>
+                    </form>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div style={{ background: `${VIOLET}08`, borderRadius: 12, padding: 16, border: `1px solid ${VIOLET}20` }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: VIOLET, marginBottom: 6 }}>Try these responses</div>
+                      <div style={{ fontSize: 12, color: `${PURPLE}90`, lineHeight: 1.5, marginBottom: 8 }}>See how the AI adapts to different inputs:</div>
+                      {[
+                        { input: "\"Fine.\"", desc: "One-word - watch the AI probe deeper" },
+                        { input: "\"I'm really stressed\"", desc: "Negative sentiment - AI offers support" },
+                        { input: "\"Loving the new challenges\"", desc: "Positive - AI explores what's working" },
+                      ].map((ex, i) => (
+                        <div key={i} style={{ marginBottom: 6, padding: "6px 8px", background: OFF_WHITE, borderRadius: 6 }}>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: VIOLET }}>{ex.input}</div>
+                          <div style={{ fontSize: 10, color: `${PURPLE}60` }}>{ex.desc}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ background: `${CREAM}60`, borderRadius: 12, padding: 16, border: `1px solid ${YELLOW}30` }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: PURPLE, marginBottom: 6 }}>Guardrails Active</div>
+                      {["No clinical diagnoses", "No promises on behalf of org", "Always offer human escalation", "Respect opt-out requests", "Unlimited exchanges", "Employee controls what gets shared"].map((g, i) => (
+                        <div key={i} style={{ fontSize: 11, color: `${PURPLE}90`, padding: "2px 0", display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={{ color: GREEN, fontSize: 13 }}>{"\u2713"}</span> {g}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div style={{ background: "#fff", borderRadius: 12, padding: 16, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>Conversation Stats</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        {[
+                          ["Your messages", chatMessages.filter(m => m.sender === "employee").length],
+                          ["Short responses", chatMessages.filter(m => m.sender === "employee" && m.text.trim().split(/\s+/).length <= 2).length],
+                          ["AI adaptations", chatMessages.filter(m => m.aiAnalysis).length],
+                        ].map(([label, val], i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}>
+                            <span style={{ color: `${PURPLE}70` }}>{label}</span>
+                            <span style={{ fontWeight: 600, color: i === 2 ? VIOLET : PURPLE }}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {tryitDone && (
+                      <button onClick={() => { setTryitMilestone(null); setChatMessages([]); setTryitDone(false); }}
+                        style={{ background: PURPLE, color: OFF_WHITE, border: "none", padding: "10px 16px", borderRadius: 10, cursor: "pointer", fontSize: 13, fontWeight: 600, width: "100%" }}>
+                        Try Another Milestone
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
