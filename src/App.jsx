@@ -319,6 +319,7 @@ export default function BelongIn() {
   const [userInput, setUserInput] = useState("");
   const [tryitDone, setTryitDone] = useState(false);
   const [selectedManager, setSelectedManager] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -572,7 +573,14 @@ export default function BelongIn() {
     return { month, score: +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) };
   });
 
-  const filteredEmployees = teamFilter ? EMPLOYEES.filter(e => e.team === teamFilter) : EMPLOYEES;
+  const filteredEmployees = EMPLOYEES.filter(e => {
+    if (teamFilter && e.team !== teamFilter) return false;
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      return e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q) || e.team.toLowerCase().includes(q) || e.manager.toLowerCase().includes(q) || e.milestones.some(m => m.event.toLowerCase().includes(q));
+    }
+    return true;
+  });
 
   // Chat window component (reused in employees tab and tryit tab)
   const ChatWindow = ({ height = 520 }) => (
@@ -627,7 +635,7 @@ export default function BelongIn() {
             { key: "tryit", label: "Try the AI" },
             { key: "improvements", label: "How to Improve" },
           ].map(tab => (
-            <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            <button key={tab.key} onClick={() => { setActiveTab(tab.key); setSearchQuery(""); }}
               style={{
                 background: activeTab === tab.key ? `${OFF_WHITE}20` : tab.key === "tryit" ? `${YELLOW}25` : "transparent",
                 color: activeTab === tab.key ? OFF_WHITE : tab.key === "tryit" ? YELLOW : `${OFF_WHITE}80`,
@@ -956,7 +964,19 @@ export default function BelongIn() {
                 </button>
               )}
             </div>
-            <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>Click an employee to view their milestone history and start a check-in</p>
+            <div style={{ marginBottom: 16 }}>
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name, role, team, or milestone..."
+                style={{ width: "100%", maxWidth: 400, border: `1px solid ${PURPLE}15`, borderRadius: 8, padding: "8px 12px", fontSize: 13, background: "#fff", color: PURPLE, outline: "none" }}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")}
+                  style={{ marginLeft: 8, background: "none", border: "none", color: `${PURPLE}50`, cursor: "pointer", fontSize: 13 }}>
+                  {"\u2715"} Clear
+                </button>
+              )}
+              {searchQuery && <span style={{ marginLeft: 8, fontSize: 12, color: `${PURPLE}50` }}>{filteredEmployees.length} result{filteredEmployees.length !== 1 ? "s" : ""}</span>}
+            </div>
 
             {showConversation && activeConversation ? (
               <div>
@@ -1104,12 +1124,30 @@ export default function BelongIn() {
             <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Team View</h2>
             <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>A people manager's view of their team's milestones, sentiment, and action items</p>
 
+            <div style={{ marginBottom: 16 }}>
+              <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={selectedManager ? "Search team members, milestones, themes..." : "Search managers or employees..."}
+                style={{ width: "100%", maxWidth: 400, border: `1px solid ${PURPLE}15`, borderRadius: 8, padding: "8px 12px", fontSize: 13, background: "#fff", color: PURPLE, outline: "none" }}
+              />
+              {searchQuery && (
+                <button onClick={() => setSearchQuery("")}
+                  style={{ marginLeft: 8, background: "none", border: "none", color: `${PURPLE}50`, cursor: "pointer", fontSize: 13 }}>
+                  {"\u2715"} Clear
+                </button>
+              )}
+            </div>
+
             {!selectedManager ? (
               /* Manager Selector */
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: PURPLE, marginBottom: 12 }}>Select a manager to view their team dashboard</div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                  {MANAGERS.map((mgr) => {
+                  {MANAGERS.filter(mgr => {
+                    if (!searchQuery) return true;
+                    const q = searchQuery.toLowerCase();
+                    const reps = EMPLOYEES.filter(e => e.manager === mgr);
+                    return mgr.toLowerCase().includes(q) || reps.some(e => e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q) || e.team.toLowerCase().includes(q));
+                  }).map((mgr) => {
                     const reports = EMPLOYEES.filter(e => e.manager === mgr);
                     const avgScore = reports.reduce((s, e) => s + (e.sentimentHistory.at(-1)?.score || 0), 0) / reports.length;
                     return (
@@ -1221,7 +1259,11 @@ export default function BelongIn() {
                       {/* Team Members */}
                       <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Your Direct Reports</div>
-                        {reports.map(e => {
+                        {reports.filter(e => {
+                          if (!searchQuery) return true;
+                          const q = searchQuery.toLowerCase();
+                          return e.name.toLowerCase().includes(q) || e.role.toLowerCase().includes(q) || e.milestones.some(m => m.event.toLowerCase().includes(q));
+                        }).map(e => {
                           const score = e.sentimentHistory.at(-1)?.score || 0;
                           const prev = e.sentimentHistory.at(-2)?.score || 0;
                           const d = score - prev;
