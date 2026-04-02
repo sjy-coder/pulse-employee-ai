@@ -182,6 +182,15 @@ const CONVERSATION_SCRIPTS = {
   ],
 };
 
+// ─── MANAGER-SENSITIVE FILTERS (hide from Team View) ───
+const SENSITIVE_MILESTONE_KEYWORDS = ["manager", "Manager"];
+const SENSITIVE_THEME_KEYWORDS = ["Manager relationship", "Manager transition", "New manager", "manager"];
+const isSensitiveMilestone = (event) => SENSITIVE_MILESTONE_KEYWORDS.some(k => event.toLowerCase().includes(k.toLowerCase()));
+const isSensitiveTheme = (theme) => SENSITIVE_THEME_KEYWORDS.some(k => theme.toLowerCase().includes(k.toLowerCase()));
+
+// ─── MANAGERS LIST (derived) ───
+const MANAGERS = [...new Set(EMPLOYEES.map(e => e.manager))].sort();
+
 // ─── TRY-IT MILESTONES (interactive mode) ───
 const TRYIT_MILESTONES = [
   { id: "anniversary", label: "Work Anniversary", icon: "\uD83C\uDF82", desc: "Celebrating 1, 2, or 3+ years at the company" },
@@ -309,6 +318,7 @@ export default function BelongIn() {
   const [tryitMilestone, setTryitMilestone] = useState(null);
   const [userInput, setUserInput] = useState("");
   const [tryitDone, setTryitDone] = useState(false);
+  const [selectedManager, setSelectedManager] = useState(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -612,6 +622,7 @@ export default function BelongIn() {
         <div style={{ display: "flex", gap: 2 }}>
           {[
             { key: "dashboard", label: "HR Dashboard" },
+            { key: "teamview", label: "Team View" },
             { key: "employees", label: "Employees" },
             { key: "tryit", label: "Try the AI" },
             { key: "improvements", label: "How to Improve" },
@@ -1079,6 +1090,271 @@ export default function BelongIn() {
                   </div>
                 )}
               </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══════ TEAM VIEW TAB (Manager Dashboard) ═══════ */}
+        {activeTab === "teamview" && (
+          <div>
+            <button onClick={() => { setActiveTab("dashboard"); setSelectedManager(null); }}
+              style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 12 }}>
+              {"\u2190"} Back to Dashboard
+            </button>
+            <h2 style={{ color: PURPLE, fontSize: 22, fontWeight: 700, margin: "0 0 4px" }}>Team View</h2>
+            <p style={{ color: `${PURPLE}90`, fontSize: 13, margin: "0 0 20px" }}>A people manager's view of their team's milestones, sentiment, and action items</p>
+
+            {!selectedManager ? (
+              /* Manager Selector */
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: PURPLE, marginBottom: 12 }}>Select a manager to view their team dashboard</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                  {MANAGERS.map((mgr) => {
+                    const reports = EMPLOYEES.filter(e => e.manager === mgr);
+                    const avgScore = reports.reduce((s, e) => s + (e.sentimentHistory.at(-1)?.score || 0), 0) / reports.length;
+                    return (
+                      <div key={mgr} onClick={() => setSelectedManager(mgr)}
+                        style={{ background: "#fff", borderRadius: 12, padding: 20, cursor: "pointer", border: "2px solid transparent", transition: "all 0.25s", boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = VIOLET; e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = `0 4px 16px ${VIOLET}15`; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "transparent"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 1px 4px rgba(42,0,57,0.06)"; }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}, ${BLUE})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: OFF_WHITE }}>{mgr.split(" ").map(n => n[0]).join("")}</div>
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: PURPLE }}>{mgr}</div>
+                            <div style={{ fontSize: 12, color: `${PURPLE}60` }}>{reports.length} direct report{reports.length !== 1 ? "s" : ""}</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 12 }}>
+                          <div style={{ flex: 1, background: `${avgScore >= 4 ? GREEN : avgScore >= 3.5 ? YELLOW : RED}08`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: avgScore >= 4 ? GREEN : avgScore >= 3.5 ? YELLOW : RED }}>{avgScore.toFixed(1)}</div>
+                            <div style={{ fontSize: 10, color: `${PURPLE}60` }}>Avg Sentiment</div>
+                          </div>
+                          <div style={{ flex: 1, background: `${BLUE}08`, borderRadius: 8, padding: "8px 10px", textAlign: "center" }}>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: BLUE }}>{reports.reduce((s, e) => s + e.milestones.filter(m => !isSensitiveMilestone(m.event)).length, 0)}</div>
+                            <div style={{ fontSize: 10, color: `${PURPLE}60` }}>Milestones</div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              /* Manager's Team Dashboard */
+              (() => {
+                const reports = EMPLOYEES.filter(e => e.manager === selectedManager);
+                const teamAvg = reports.reduce((s, e) => s + (e.sentimentHistory.at(-1)?.score || 0), 0) / reports.length;
+                const prevAvg = reports.reduce((s, e) => s + (e.sentimentHistory.at(-2)?.score || 0), 0) / reports.length;
+                const delta = teamAvg - prevAvg;
+
+                const safeMilestones = reports.flatMap(e => e.milestones.filter(m => !isSensitiveMilestone(m.event)).map(m => ({ employee: e, milestone: m })));
+                const upcomingMilestones = safeMilestones.filter(r => r.milestone.status === "upcoming" || r.milestone.status === "pending");
+                const completedMilestones = safeMilestones.filter(r => r.milestone.status === "completed");
+
+                const actionItems = [];
+                Object.entries(CONVERSATION_SCRIPTS).forEach(([event, script]) => {
+                  if (isSensitiveMilestone(event)) return;
+                  const lastMsg = script[script.length - 1];
+                  if (lastMsg?.meta?.routed_to?.includes("Manager")) {
+                    const emp = reports.find(e => e.milestones.some(m => m.event === event));
+                    if (emp) {
+                      actionItems.push({ employee: emp, event, action: lastMsg.meta.action, themes: lastMsg.meta.themes?.filter(t => !isSensitiveTheme(t)) || [] });
+                    }
+                  }
+                });
+
+                const safeThemes = {};
+                completedMilestones.forEach(({ milestone }) => {
+                  const script = CONVERSATION_SCRIPTS[milestone.event];
+                  if (!script) return;
+                  const lastMsg = script[script.length - 1];
+                  if (lastMsg?.meta?.themes) {
+                    lastMsg.meta.themes.filter(t => !isSensitiveTheme(t)).forEach(t => {
+                      safeThemes[t] = (safeThemes[t] || 0) + 1;
+                    });
+                  }
+                });
+
+                const months = ["Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+                const teamTrend = months.map(month => {
+                  const scores = reports.map(e => {
+                    const entry = e.sentimentHistory.find(h => h.month === month);
+                    return entry ? entry.score : 0;
+                  });
+                  return { month, score: +(scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(2) };
+                });
+
+                return (
+                  <div>
+                    <button onClick={() => setSelectedManager(null)}
+                      style={{ background: `${PURPLE}10`, color: PURPLE, border: "none", padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600, marginBottom: 16 }}>
+                      {"\u2190"} All Managers
+                    </button>
+
+                    {/* Manager Header */}
+                    <div style={{ background: "#fff", borderRadius: 12, padding: 20, marginBottom: 16, boxShadow: "0 1px 4px rgba(42,0,57,0.06)", display: "flex", alignItems: "center", gap: 16 }}>
+                      <div style={{ width: 52, height: 52, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}, ${BLUE})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: OFF_WHITE }}>{selectedManager.split(" ").map(n => n[0]).join("")}</div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 20, fontWeight: 700, color: PURPLE }}>{selectedManager}'s Team</div>
+                        <div style={{ fontSize: 13, color: `${PURPLE}70` }}>{reports.length} direct reports</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 16 }}>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: teamAvg >= 4 ? GREEN : teamAvg >= 3.5 ? YELLOW : RED }}>{teamAvg.toFixed(1)}</div>
+                          <div style={{ fontSize: 11, color: `${PURPLE}60` }}>Team Sentiment</div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: delta > 0 ? GREEN : delta < 0 ? RED : `${PURPLE}50` }}>
+                            {delta > 0 ? `+${delta.toFixed(1)}` : delta < 0 ? delta.toFixed(1) : "0.0"}
+                          </div>
+                          <div style={{ fontSize: 11, color: `${PURPLE}60` }}>vs Last Month</div>
+                        </div>
+                        <div style={{ textAlign: "center" }}>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: BLUE }}>{upcomingMilestones.length}</div>
+                          <div style={{ fontSize: 11, color: `${PURPLE}60` }}>Upcoming</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                      {/* Team Members */}
+                      <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Your Direct Reports</div>
+                        {reports.map(e => {
+                          const score = e.sentimentHistory.at(-1)?.score || 0;
+                          const prev = e.sentimentHistory.at(-2)?.score || 0;
+                          const d = score - prev;
+                          return (
+                            <div key={e.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", marginBottom: 6, borderRadius: 10, background: score < 3.5 ? `${RED}06` : `${OFF_WHITE}80`, border: score < 3.5 ? `1px solid ${RED}15` : "1px solid transparent" }}>
+                              <div style={{ width: 34, height: 34, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}30, ${BLUE}30)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: PURPLE, flexShrink: 0 }}>{e.avatar}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: PURPLE }}>{e.name}</div>
+                                <div style={{ fontSize: 11, color: `${PURPLE}60` }}>{e.role}</div>
+                              </div>
+                              <SentimentBar score={score} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: d > 0 ? GREEN : d < 0 ? RED : `${PURPLE}40`, minWidth: 32, textAlign: "right" }}>
+                                {d > 0 ? `+${d.toFixed(1)}` : d < 0 ? d.toFixed(1) : "-"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Team Sentiment Trend */}
+                      <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Team Sentiment Trend</div>
+                        <ResponsiveContainer width="100%" height={180}>
+                          <LineChart data={teamTrend}>
+                            <XAxis dataKey="month" tick={{ fontSize: 11, fill: PURPLE }} axisLine={false} tickLine={false} />
+                            <YAxis domain={[2.5, 5]} tick={{ fontSize: 11, fill: PURPLE }} axisLine={false} tickLine={false} />
+                            <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: "none", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }} />
+                            <Line type="monotone" dataKey="score" stroke={VIOLET} strokeWidth={2.5} dot={{ fill: VIOLET, r: 4 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                      {/* Action Items for Manager */}
+                      <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ width: 8, height: 8, borderRadius: "50%", background: actionItems.length > 0 ? YELLOW : GREEN, display: "inline-block" }} />
+                          Action Items for Your 1:1s
+                        </div>
+                        {actionItems.length > 0 ? actionItems.map((item, i) => (
+                          <div key={i} style={{ padding: "10px 12px", marginBottom: 8, borderRadius: 10, background: `${CREAM}60`, border: `1px solid ${YELLOW}25` }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: PURPLE }}>{item.employee.name}</span>
+                              <span style={{ fontSize: 10, color: `${PURPLE}50` }}>{item.event}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: `${PURPLE}90`, marginBottom: 4 }}>{item.action}</div>
+                            {item.themes.length > 0 && (
+                              <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                                {item.themes.map((t, j) => (
+                                  <span key={j} style={{ background: `${VIOLET}12`, color: VIOLET, padding: "1px 6px", borderRadius: 6, fontSize: 10, fontWeight: 500 }}>{t}</span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )) : (
+                          <div style={{ textAlign: "center", padding: "20px 10px", color: `${PURPLE}50`, fontSize: 13 }}>
+                            {"\u2713"} No pending action items
+                          </div>
+                        )}
+                        <div style={{ marginTop: 8, padding: "8px 10px", background: `${VIOLET}06`, borderRadius: 8, fontSize: 11, color: `${PURPLE}70`, lineHeight: 1.5 }}>
+                          These insights come from anonymized check-in conversations. Employees chose to have these themes shared with you.
+                        </div>
+                      </div>
+
+                      {/* Themes from Check-ins (filtered) */}
+                      <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Themes from Your Team's Check-ins</div>
+                        {Object.keys(safeThemes).length > 0 ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {Object.entries(safeThemes).sort((a, b) => b[1] - a[1]).map(([theme, count], i) => (
+                              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: `${OFF_WHITE}` }}>
+                                <div style={{ width: 28, height: 28, borderRadius: 8, background: `${VIOLET}12`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: VIOLET, flexShrink: 0 }}>{count}</div>
+                                <div style={{ fontSize: 12, fontWeight: 500, color: PURPLE }}>{theme}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div style={{ textAlign: "center", padding: "20px 10px", color: `${PURPLE}50`, fontSize: 13 }}>
+                            No themes to show yet
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Upcoming Milestones */}
+                    {upcomingMilestones.length > 0 && (
+                      <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)", marginBottom: 16 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Upcoming Milestones</div>
+                        {upcomingMilestones.map((r, i) => (
+                          <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", marginBottom: 6, borderRadius: 10, background: `${OFF_WHITE}`, border: `1px solid ${PURPLE}08` }}>
+                            <div style={{ width: 32, height: 32, borderRadius: "50%", background: `linear-gradient(135deg, ${VIOLET}30, ${BLUE}30)`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: PURPLE }}>{r.employee.avatar}</div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: PURPLE }}>{r.employee.name}</div>
+                              <div style={{ fontSize: 12, color: `${PURPLE}70` }}>{r.milestone.event}</div>
+                            </div>
+                            <div style={{ fontSize: 12, color: `${PURPLE}60` }}>{r.milestone.date}</div>
+                            <TierBadge tier={r.milestone.tier} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Recent Completed Check-ins (filtered) */}
+                    <div style={{ background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 1px 4px rgba(42,0,57,0.06)" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: PURPLE, marginBottom: 12 }}>Completed Check-ins</div>
+                      {completedMilestones.length > 0 ? (
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ borderBottom: `2px solid ${PURPLE}15` }}>
+                              {["Employee", "Milestone", "Tier", "Sentiment"].map(h => (
+                                <th key={h} style={{ textAlign: "left", padding: "8px 10px", fontSize: 11, color: `${PURPLE}80`, textTransform: "uppercase", letterSpacing: 0.5, fontWeight: 600 }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {completedMilestones.sort((a, b) => new Date(b.milestone.date) - new Date(a.milestone.date)).map((row, i) => (
+                              <tr key={i} style={{ borderBottom: `1px solid ${PURPLE}08` }}>
+                                <td style={{ padding: "10px", color: PURPLE, fontWeight: 500 }}>{row.employee.name}</td>
+                                <td style={{ padding: "10px", color: PURPLE }}>{row.milestone.event}</td>
+                                <td style={{ padding: "10px" }}><TierBadge tier={row.milestone.tier} /></td>
+                                <td style={{ padding: "10px" }}><SentimentBar score={row.milestone.sentiment} /></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: "center", padding: "20px 10px", color: `${PURPLE}50`, fontSize: 13 }}>No completed check-ins yet</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
         )}
